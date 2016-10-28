@@ -138,7 +138,7 @@ get-prom-data:
 
 get-pod-logs:
 	@mkdir -p timings
-	-kubectl get pods | grep getter | cut -f 1 -d " " | xargs -iPOD sh -c 'kubectl logs POD | gzip > timings/POD.log.gz &'
+	-kubectl get pods | grep getter | cut -f 1 -d " " | xargs -IPOD sh -c 'kubectl logs POD | gzip > timings/POD.log.gz &'
 
 $(LOG_RETRIEVAL_TARGETS): job%:
 	@mkdir -p timings
@@ -276,8 +276,8 @@ deploy-master:
 	  echo "master node started."
 
 deploy-nodes:
-	echo $(NODE_NAMES) | xargs -n250 | xargs -I{} sh -c 'gcloud compute instances create \
-	  {} \
+	gcloud compute instances create \
+	  $(NODE_NAMES) \
 	  --zone $(GCE_REGION) \
 	  --image-project coreos-cloud \
 	  --image $(GCE_IMAGE_NAME) \
@@ -288,7 +288,7 @@ deploy-nodes:
 	  echo "Waiting for creation of this batch of worker nodes to finish..."; \
 		wait; \
 		echo "Batch of nodes created. Waiting 120s for cluster to settle down..."; \
-	  sleep 120;'
+	  sleep 120;
 
 deploy-prom:
 	-gcloud compute instances create \
