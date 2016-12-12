@@ -24,10 +24,6 @@ CNI_VER:=v0.3.0
 # Images, based on above versions.
 GETTER_IMAGE:=calico/getter
 FLANNEL_IMAGE:=quay.io/coreos/flannel-git:v0.6.1-28-g5dde68d-amd64
-CALICO_POLICY_IMAGE:=calico/kube-policy-controller:${CALICO_POLICY_VER}
-CALICO_CNI_IMAGE:=calico/cni:${CALICO_CNI_VER}
-NODE_IMAGE:=calico/node:${CALICO_CONT_VER}
-CALICOCTL_IMAGE:=calico/ctl:${CALICO_CONT_VER}
 
 # IP range to use for pods.
 POD_CIDR:=10.244.0.0/16
@@ -40,14 +36,20 @@ POD_INFRA_IMAGE=gcr.io/google_containers/pause:0.8.0
 # For ease, just allow all scopes.
 MASTER_SCOPES:=https://www.googleapis.com/auth/cloud-platform
 
-IPAM_PLUGIN_URL:=https://github.com/projectcalico/calico-cni/releases/download/$(CALICO_CNI_VER)/calico-ipam
-CNI_PLUGIN_URL:=https://github.com/containernetworking/cni/releases/download/$(CNI_VER)/cni-$(CNI_VER).tgz
 # URL of pre-configured Grafana DB.  Currently, this is empty apart from
 # having Prometheus pre-configured as the default data source.
 GRAFANA_DB_URL:=https://storage.googleapis.com/calico-scale-testing-files/grafana.db
-CALICOCTL_URL:=https://github.com/projectcalico/calico-containers/releases/download/${CALICO_CONT_VER}/calicoctl
 
 -include local-settings.mk
+
+# Calculated vars
+CALICOCTL_URL:=https://github.com/projectcalico/calico-containers/releases/download/$(CALICO_CONT_VER)/calicoctl
+IPAM_PLUGIN_URL:=https://github.com/projectcalico/calico-cni/releases/download/$(CALICO_CNI_VER)/calico-ipam
+CNI_PLUGIN_URL:=https://github.com/containernetworking/cni/releases/download/$(CNI_VER)/cni-$(CNI_VER).tgz
+CALICO_POLICY_IMAGE:=calico/kube-policy-controller:$(CALICO_POLICY_VER)
+CALICO_CNI_IMAGE:=calico/cni:$(CALICO_CNI_VER)
+NODE_IMAGE:=calico/node:$(CALICO_CONT_VER)
+CALICOCTL_IMAGE:=calico/ctl:$(CALICO_CONT_VER)
 
 # GCE bucket we use to store files we need to transfer to hosts.
 GCE_BUCKET:=$(PREFIX)-data
@@ -91,7 +93,7 @@ kubectl:
 	chmod +x kubectl
 
 calicoctl-status:
-	-ssh -o StrictHostKeyChecking=no -o LogLevel=quiet core@${PREFIX}-master.${GCE_REGION}.unique-caldron-775 sudo ETCD_AUTHORITY=kube-scale-etcd-01:2379 calicoctl status
+	-gcloud compute ssh core@${PREFIX}-master -- -o StrictHostKeyChecking=no -o LogLevel=quiet sudo ETCD_AUTHORITY=$(PREFIX)-etcd-01:2379 calicoctl status
 
 calicoctl:
 	wget http://www.projectcalico.org/builds/calicoctl
@@ -138,6 +140,8 @@ scale-getter:
 	echo 'Now use "make gce-successful-pods" to check they are all running'
 
 get-results:
+	mkdir -p policy-scale-test/testdata
+	touch policy-scale-test/testdata/result.txt
 	bash -c 'source ../env/bin/activate && cd $(CURRENT_DIR)/policy-scale-test && python get-data.py | tee testdata/result.txt'
 
 # See http://stackoverflow.com/a/12110773/61318
@@ -147,7 +151,7 @@ get-diags2: describe-services describe-rc describe-ep get-prom-data $(LOG_RETRIE
 
 get-prom-data:
 	@mkdir -p timings
-	-ssh -A -o StrictHostKeyChecking=no -o LogLevel=quiet core@$(PREFIX)-master.$(GCE_REGION).$(GCE_PROJECT) ssh -o LogLevel=quiet -o StrictHostKeyChecking=no $(PREFIX)-prom sudo tar -cvzf - /var/log/prom_data > timings/prom_data.tgz
+	-gcloud compute ssh core@$(PREFIX)-master -- -A -o StrictHostKeyChecking=no -o LogLevel=quiet ssh -o LogLevel=quiet -o StrictHostKeyChecking=no $(PREFIX)-prom sudo tar -cvzf - /var/log/prom_data > timings/prom_data.tgz
 
 get-pod-logs:
 	# -P added to limit how many processes can get kicked off at a time for log collection.
@@ -156,8 +160,8 @@ get-pod-logs:
 
 $(LOG_RETRIEVAL_TARGETS): job%:
 	@mkdir -p timings
-	-ssh -A -o StrictHostKeyChecking=no -o LogLevel=quiet core@$(PREFIX)-master.$(GCE_REGION).$(GCE_PROJECT) ssh -o LogLevel=quiet -o StrictHostKeyChecking=no $(PREFIX)-$* journalctl --no-pager > timings/journal-$*.log &
-	-ssh -A -o StrictHostKeyChecking=no -o LogLevel=quiet core@$(PREFIX)-master.$(GCE_REGION).$(GCE_PROJECT) ssh -o LogLevel=quiet -o StrictHostKeyChecking=no $(PREFIX)-$* sudo /home/core/getcdiags.sh > timings/diags-$*.tgz &
+	-gcloud compute ssh core@$(PREFIX)-master -- -A -o StrictHostKeyChecking=no -o LogLevel=quiet ssh -o LogLevel=quiet -o StrictHostKeyChecking=no $(PREFIX)-$* journalctl --no-pager > timings/journal-$*.log &
+	-gcloud compute ssh core@$(PREFIX)-master -- -A -o StrictHostKeyChecking=no -o LogLevel=quiet ssh -o LogLevel=quiet -o StrictHostKeyChecking=no $(PREFIX)-$* sudo /home/core/getcdiags.sh > timings/diags-$*.tgz &
 	-gcloud compute instances get-serial-port-output $(PREFIX)-$* > timings/serial-$*.log
 
 describe-nodes:
@@ -282,8 +286,8 @@ deploy-master:
 	  echo "master node started."
 
 deploy-nodes:
-	gcloud compute instances create \
-	  $(NODE_NAMES) \
+	echo $(NODE_NAMES) | xargs -n250 | xargs -INODES sh -c 'gcloud compute instances create \
+	  NODES \
 	  --zone $(GCE_REGION) \
 	  --image-project $(GCE_IMAGE_PROJECT) \
 	  --image $(GCE_IMAGE_NAME) \
@@ -295,7 +299,7 @@ deploy-nodes:
 	  echo "Waiting for creation of this batch of worker nodes to finish..."; \
 		wait; \
 		echo "Batch of nodes created. Waiting 120s for cluster to settle down..."; \
-	  sleep 120;
+	  sleep 120';
 
 deploy-prom:
 	-gcloud compute instances create \
@@ -449,13 +453,13 @@ gce-config-ssh:
 	gcloud compute config-ssh
 
 gce-ssh-master:
-	ssh -A core@$(PREFIX)-master.$(GCE_REGION).$(GCE_PROJECT)
+	gcloud compute ssh core@$(PREFIX)-master -- -A
 
 gce-bgp-status:
-	ssh core@$(PREFIX)-master.$(GCE_REGION).$(GCE_PROJECT) /opt/bin/calicoctl status
+	gcloud compute ssh core@$(PREFIX)-master -- /opt/bin/calicoctl status
 
 gce-bgp-status-count:
-	ssh core@$(PREFIX)-master.$(GCE_REGION).$(GCE_PROJECT) /opt/bin/calicoctl status |grep -c Established
+	gcloud compute ssh core@$(PREFIX)-master -- /opt/bin/calicoctl status |grep -c Established
 
 gce-list-nodes:
 	kubectl get no --no-headers -l 'kubernetes.io/hostname!=127.0.0.1'
