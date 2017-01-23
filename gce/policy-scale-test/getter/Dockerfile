@@ -1,4 +1,4 @@
-# Copyright 2015 Metaswitch Networks
+# Copyright 2015 Tigera, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM alpine:edge 
+FROM alpine:edge
 
 # Install the system packages needed for building the PyInstaller based binary
-RUN apk -U add --virtual temp python-dev py2-pip alpine-sdk python 
+RUN apk -U add --virtual temp python-dev py2-pip alpine-sdk python
 
 # Install python dependencies
-RUN pip install datetime requests 
+RUN pip install datetime requests
 
 ADD getter.py /getter.py
 
