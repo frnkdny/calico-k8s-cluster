@@ -26,6 +26,15 @@ write_files:
       FILE=`calicoctl node diags | tail -1 | cut -f 7 -d " "`
       cat ${FILE}
 
+  # Cloud provider configuration.
+  - path: /etc/gce.conf
+    owner: root
+    permissions: 0755
+    content: |
+      [Global]
+      node-instance-prefix=__CLUSTER_PREFIX__
+      node-tags=__CLUSTER_PREFIX__
+
   # Need to configure localhost since GCE doesn't do it for us.
   # Specifically, the leader election container requires localhost
   # to resolve to 127.0.0.1
@@ -140,6 +149,7 @@ coreos:
         Restart=always
         RestartSec=10
         LimitNOFILE=40000
+
     - name: kube-controller-manager.service
       command: start
       content: |
@@ -157,11 +167,14 @@ coreos:
         --root-ca-file=/var/run/kubernetes/apiserver.crt \
         --allocate-node-cidrs=true \
         --configure-cloud-routes=false \
+        --cloud-provider=gce \
+        --cloud-config=/etc/gce.conf \
         --cluster-name=__CLUSTER_PREFIX__ \
         --cluster-cidr=__POD_CIDR__ \
         --logtostderr=true
         Restart=always
         RestartSec=10
+
     - name: kube-scheduler.service
       command: start
       content: |
@@ -207,7 +220,7 @@ coreos:
         --config=/etc/kubernetes/manifests \
         --network-plugin-dir=/etc/cni/net.d \
         --network-plugin=cni \
-        --pod-infra-container-image=__POD_INFRA_IMAGE__ \ 
+        --pod-infra-container-image=__POD_INFRA_IMAGE__ \
         --logtostderr=true
         Restart=always
         RestartSec=10
