@@ -15,10 +15,10 @@ RR_INSTANCE_TYPE:=n1-standard-4
 PREFIX:=kube-scale
 
 # Calico / Kubernetes versions.
-K8S_VER:=v1.4.5
-CALICO_POLICY_VER:=v0.5.1
-CALICO_CONT_VER:=v0.23.0
-CALICO_CNI_VER:=v1.5.1
+K8S_VER:=v1.5.3
+CALICO_POLICY_VER:=v0.5.3
+CALICO_CNI_VER:=v1.6.0
+CALICO_CONT_VER:=v1.0.2
 CNI_VER:=v0.3.0
 
 # Images, based on above versions.
@@ -280,14 +280,15 @@ deploy-master:
 	  --scopes $(MASTER_SCOPES) \
 	  --can-ip-forward \
 	  --local-ssd interface=scsi \
-	  --metadata-from-file user-data=build/master-config-template.yaml & \
+	  --metadata-from-file user-data=build/master-config-template.yaml \
+	  --tags k8s-master,$(PREFIX) \
 	  echo "Waiting for creation of master node to finish..."; \
 	  wait; \
 	  echo "master node started."
 
 deploy-nodes:
-	echo $(NODE_NAMES) | xargs -n250 | xargs -INODES sh -c 'gcloud compute instances create \
-	  NODES \
+	-gcloud compute instances create \
+	  $(NODE_NAMES) \
 	  --zone $(GCE_REGION) \
 	  --image-project $(GCE_IMAGE_PROJECT) \
 	  --image $(GCE_IMAGE_NAME) \
@@ -295,11 +296,11 @@ deploy-nodes:
 	  --metadata-from-file user-data=build/node-config-template.yaml \
 	  --no-address \
 	  --can-ip-forward \
-	  --tags no-ip & \
+	  --tags no-ip,k8s-node,$(PREFIX) & \
 	  echo "Waiting for creation of this batch of worker nodes to finish..."; \
 		wait; \
 		echo "Batch of nodes created. Waiting 120s for cluster to settle down..."; \
-	  sleep 120';
+	  sleep 120;
 
 deploy-prom:
 	-gcloud compute instances create \

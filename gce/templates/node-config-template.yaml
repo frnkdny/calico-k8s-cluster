@@ -12,6 +12,17 @@ write_files:
       FILE=`calicoctl node diags | tail -1 | cut -f 7 -d " "`
       cat ${FILE}
 
+  # We need to do this because of a mismatch between what HOSTNAME reports,
+  # and what Kubernetes expects.  We cut off the trailing bits of domain name
+  # so it matches the GCE instance name.
+  - path: /home/core/build-kubelet-env.sh
+    owner: root
+    permissions: 0755
+    content: |
+      #!/bin/bash
+      HOST=$(echo ${HOSTNAME} | cut -f1 -d".")
+      echo "HOSTNAME_OVERRIDE=${HOST}" > /opt/bin/kubelet.env
+
   - path: /etc/resolv.conf
     owner: root
     permissions: 0755
@@ -58,6 +69,16 @@ coreos:
     - name: etcd2.service
       command: start
 
+    - name: build-env.service
+      runtime: true
+      command: start
+      content: |
+        [Unit]
+        After=docker.service
+
+        [Service]
+        ExecStart=/home/core/build-kubelet-env.sh
+
     - name: kubelet.service
       runtime: true
       command: start
@@ -65,15 +86,16 @@ coreos:
         [Unit]
         Description=Kubernetes Kubelet
         Documentation=https://github.com/kubernetes/kubernetes
-        After=docker.service
         After=etcd2.service
-        Requires=docker.service
-        Requires=download.service
+        After=build-env.service
+        Requires=download.service docker.service build-env.service
 
         [Service]
+        EnvironmentFile=/opt/bin/kubelet.env
         # calicoctl needed for diags collection
         ExecStartPre=/usr/bin/wget -N -P /opt/bin http://__CLUSTER_PREFIX__-master/calicoctl
         ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
+        # prefetch images.
         ExecStartPre=/usr/bin/docker pull __CLUSTER_PREFIX__-master:5000/scale-tester
         ExecStartPre=/usr/bin/docker pull __CLUSTER_PREFIX__-master:5000/calico-cni
         ExecStartPre=/usr/bin/docker pull __CLUSTER_PREFIX__-master:5000/calico-node
@@ -88,9 +110,10 @@ coreos:
         --cluster-dns=10.100.0.10 \
         --cluster-domain=cluster.local \
         --api-servers=http://__CLUSTER_PREFIX__-master:8080 \
+        --hostname-override=${HOSTNAME_OVERRIDE} \
         --network-plugin-dir=/etc/cni/net.d \
         --network-plugin=cni \
-        --pod-infra-container-image=__POD_INFRA_IMAGE__ \ 
+        --pod-infra-container-image=__POD_INFRA_IMAGE__ \
         --max-pods=110 \
         --logtostderr=true
         Restart=always
