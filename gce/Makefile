@@ -1,6 +1,7 @@
 # Parameters for the cluster, don't edit these directly, put your changes in
 # local-settings.mk.
 CLUSTER_SIZE:=2
+NUM_HIGH_PERF_NODES:=1
 ETCD_CLUSTER_SIZE:=3
 NUM_PODS:=300
 GCE_REGION:=us-central1-f
@@ -12,11 +13,12 @@ NODE_INSTANCE_TYPE:=n1-highcpu-4
 ETCD_INSTANCE_TYPE:=n1-standard-16
 PROM_INSTANCE_TYPE:=n1-standard-4
 RR_INSTANCE_TYPE:=n1-standard-4
+HIGH_PERF_INSTANCE_TYPE:=n1-standard-8
 PREFIX:=kube-scale
 
 # Calico / Kubernetes versions.
 K8S_VER:=v1.5.3
-CALICO_POLICY_VER:=v0.5.3
+CALICO_POLICY_VER:=v0.5.2
 CALICO_CNI_VER:=v1.6.0
 CALICO_CONT_VER:=v1.0.2
 CNI_VER:=v0.3.0
@@ -31,10 +33,11 @@ POD_CIDR:=10.244.0.0/16
 # Image used by kubelet as infrastructure container.
 POD_INFRA_IMAGE=gcr.io/google_containers/pause:0.8.0
 
-# GCE Scopes for the master.  These grant permissions to the master 
+# GCE Scopes for the master and nodes.  These grant permissions 
 # to read / write various bits of GCE config (e.g routes).
 # For ease, just allow all scopes.
 MASTER_SCOPES:=https://www.googleapis.com/auth/cloud-platform
+NODE_SCOPES:=https://www.googleapis.com/auth/cloud-platform
 
 # URL of pre-configured Grafana DB.  Currently, this is empty apart from
 # having Prometheus pre-configured as the default data source.
@@ -59,10 +62,14 @@ NGINX_INSTANCES:=$(shell echo ${CLUSTER_SIZE}/10 + 1 | bc)
 # Generate node names.
 NODE_NUMBERS := $(shell seq -f '%03.0f' 1 $(CLUSTER_SIZE))
 NODE_NAMES := $(addprefix $(PREFIX)-,$(NODE_NUMBERS))
+
 ETCD_NODE_NUMBERS := $(shell seq -f '%02.0f' 1 $(ETCD_CLUSTER_SIZE))
 ETCD_NODE_SUFFIXES := $(addprefix etcd-,$(ETCD_NODE_NUMBERS))
 ETCD_NODE_NAMES := $(addprefix $(PREFIX)-,$(ETCD_NODE_SUFFIXES))
 ETCD_CONFIG_FILENAMES := $(addprefix build/etcd-,$(ETCD_NODE_NUMBERS))
+
+HIGH_PERF_NODE_NUMBERS := $(shell seq -f '%02.0f' 1 $(NUM_HIGH_PERF_NODES))
+HIGH_PERF_NODE_NAMES := $(addprefix $(PREFIX)-,highperf-$(NUM_HIGH_PERF_NODES))
 
 # Figure out what files need templating.
 INPUT_TEMPLATES := $(shell find templates/ -type f)
@@ -262,10 +269,10 @@ build/prom-conf-url: Makefile local-settings.mk build/prometheus.yml
 
 gce-create: kubectl calicoctl $(TEMPLATED_OUTPUT)
 	$(MAKE) --no-print-directory deploy-master
-	$(MAKE) --no-print-directory deploy-prom
 	$(MAKE) --no-print-directory deploy-etcd
 	$(MAKE) --no-print-directory deploy-rr
 	$(MAKE) --no-print-directory deploy-nodes
+	$(MAKE) --no-print-directory deploy-high-perf-nodes
 	$(MAKE) --no-print-directory gce-config-ssh
 	$(MAKE) --no-print-directory gce-forward-ports
 	#$(MAKE) --no-print-directory apply-node-labels
@@ -281,7 +288,7 @@ deploy-master:
 	  --can-ip-forward \
 	  --local-ssd interface=scsi \
 	  --metadata-from-file user-data=build/master-config-template.yaml \
-	  --tags k8s-master,$(PREFIX) \
+	  --tags k8s-master,$(PREFIX) & \
 	  echo "Waiting for creation of master node to finish..."; \
 	  wait; \
 	  echo "master node started."
@@ -293,10 +300,28 @@ deploy-nodes:
 	  --image-project $(GCE_IMAGE_PROJECT) \
 	  --image $(GCE_IMAGE_NAME) \
 	  --machine-type $(NODE_INSTANCE_TYPE) \
+	  --scopes $(NODE_SCOPES) \
 	  --metadata-from-file user-data=build/node-config-template.yaml \
 	  --no-address \
 	  --can-ip-forward \
 	  --tags no-ip,k8s-node,$(PREFIX) & \
+	  echo "Waiting for creation of this batch of worker nodes to finish..."; \
+		wait; \
+		echo "Batch of nodes created. Waiting 120s for cluster to settle down..."; \
+	  sleep 120;
+
+deploy-high-perf-nodes:
+	-gcloud compute instances create \
+	  $(HIGH_PERF_NODE_NAMES) \
+	  --zone $(GCE_REGION) \
+	  --image-project $(GCE_IMAGE_PROJECT) \
+	  --image $(GCE_IMAGE_NAME) \
+	  --machine-type $(HIGH_PERF_INSTANCE_TYPE) \
+	  --scopes $(NODE_SCOPES) \
+	  --metadata-from-file user-data=build/node-config-template.yaml \
+	  --no-address \
+	  --can-ip-forward \
+	  --tags no-ip,k8s-node,high-perf,$(PREFIX) & \
 	  echo "Waiting for creation of this batch of worker nodes to finish..."; \
 		wait; \
 		echo "Batch of nodes created. Waiting 120s for cluster to settle down..."; \
@@ -426,6 +451,10 @@ gce-cleanup:
 	# Clean up any routes created by the cluster.
 	gcloud compute routes list -r '$(PREFIX).*' | \
 	  tail -n +2 | cut -f1 -d' ' | xargs gcloud compute routes delete 
+	# Clean up any firewall-rules created by the cluster.
+	gcloud compute firewall-rules delete $(gcloud compute firewall-rules list | grep '$(PREFIX)' | awk '{print $1}')
+	# Clean up any disks created by the cluster.
+	gcloud compute disks delete $(gcloud compute disks list | grep '$(PREFIIX)' | awk '{print $1}')
 
 gce-forward-ports:
 	@-pkill -f '8080:localhost:8080'
