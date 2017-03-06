@@ -18,7 +18,7 @@ PREFIX:=kube-scale
 
 # Calico / Kubernetes versions.
 K8S_VER:=v1.5.3
-CALICO_POLICY_VER:=v0.5.3
+CALICO_POLICY_VER:=v0.5.2
 CALICO_CNI_VER:=v1.6.0
 CALICO_CONT_VER:=v1.0.2
 CNI_VER:=v0.3.0
@@ -33,10 +33,11 @@ POD_CIDR:=10.244.0.0/16
 # Image used by kubelet as infrastructure container.
 POD_INFRA_IMAGE=gcr.io/google_containers/pause:0.8.0
 
-# GCE Scopes for the master.  These grant permissions to the master 
+# GCE Scopes for the master and nodes.  These grant permissions 
 # to read / write various bits of GCE config (e.g routes).
 # For ease, just allow all scopes.
 MASTER_SCOPES:=https://www.googleapis.com/auth/cloud-platform
+NODE_SCOPES:=https://www.googleapis.com/auth/cloud-platform
 
 # URL of pre-configured Grafana DB.  Currently, this is empty apart from
 # having Prometheus pre-configured as the default data source.
@@ -268,7 +269,6 @@ build/prom-conf-url: Makefile local-settings.mk build/prometheus.yml
 
 gce-create: kubectl calicoctl $(TEMPLATED_OUTPUT)
 	$(MAKE) --no-print-directory deploy-master
-	$(MAKE) --no-print-directory deploy-prom
 	$(MAKE) --no-print-directory deploy-etcd
 	$(MAKE) --no-print-directory deploy-rr
 	$(MAKE) --no-print-directory deploy-nodes
@@ -300,6 +300,7 @@ deploy-nodes:
 	  --image-project $(GCE_IMAGE_PROJECT) \
 	  --image $(GCE_IMAGE_NAME) \
 	  --machine-type $(NODE_INSTANCE_TYPE) \
+	  --scopes $(NODE_SCOPES) \
 	  --metadata-from-file user-data=build/node-config-template.yaml \
 	  --no-address \
 	  --can-ip-forward \
@@ -316,6 +317,7 @@ deploy-high-perf-nodes:
 	  --image-project $(GCE_IMAGE_PROJECT) \
 	  --image $(GCE_IMAGE_NAME) \
 	  --machine-type $(HIGH_PERF_INSTANCE_TYPE) \
+	  --scopes $(NODE_SCOPES) \
 	  --metadata-from-file user-data=build/node-config-template.yaml \
 	  --no-address \
 	  --can-ip-forward \
@@ -449,6 +451,10 @@ gce-cleanup:
 	# Clean up any routes created by the cluster.
 	gcloud compute routes list -r '$(PREFIX).*' | \
 	  tail -n +2 | cut -f1 -d' ' | xargs gcloud compute routes delete 
+	# Clean up any firewall-rules created by the cluster.
+	gcloud compute firewall-rules delete $(gcloud compute firewall-rules list | grep '$(PREFIX)' | awk '{print $1}')
+	# Clean up any disks created by the cluster.
+	gcloud compute disks delete $(gcloud compute disks list | grep '$(PREFIIX)' | awk '{print $1}')
 
 gce-forward-ports:
 	@-pkill -f '8080:localhost:8080'
