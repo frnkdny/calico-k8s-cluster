@@ -68,8 +68,9 @@ ETCD_NODE_SUFFIXES := $(addprefix etcd-,$(ETCD_NODE_NUMBERS))
 ETCD_NODE_NAMES := $(addprefix $(PREFIX)-,$(ETCD_NODE_SUFFIXES))
 ETCD_CONFIG_FILENAMES := $(addprefix build/etcd-,$(ETCD_NODE_NUMBERS))
 
-HIGH_PERF_NODE_NUMBERS := $(shell seq -f '%02.0f' 1 $(NUM_HIGH_PERF_NODES))
-HIGH_PERF_NODE_NAMES := $(addprefix $(PREFIX)-,highperf-$(NUM_HIGH_PERF_NODES))
+HIGH_PERF_PREFIX := $(addprefix $(PREFIX)-,highperf)
+HIGH_PERF_NODE_NUMBERS := $(shell seq -f '%03.0f' 1 $(NUM_HIGH_PERF_NODES))
+HIGH_PERF_NODE_NAMES := $(addprefix $(HIGH_PERF_PREFIX)-,$(HIGH_PERF_NODE_NUMBERS))
 
 # Figure out what files need templating.
 INPUT_TEMPLATES := $(shell find templates/ -type f)

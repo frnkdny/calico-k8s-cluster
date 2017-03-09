@@ -11,7 +11,7 @@ write_files:
         cd /home/core/
 
         # Download calicoctl and make it executable:
-        while ! wget https://github.com/projectcalico/calico-containers/releases/download/v0.19.0/calicoctl -O calicoctl; do
+        while ! wget __CALICOCTL_URL__ -O calicoctl; do
           echo Failed to download calicoctl
         done
         chmod +x ./calicoctl
@@ -21,13 +21,24 @@ write_files:
           echo "Failed to pull route reflector image"
         done
 
-        while ! ./calicoctl bgp node-mesh off;
+        while ! ./calicoctl config set nodeToNodeMesh off;
         do
           echo Failed to turn off BGP mesh.
         done
 
-        calico_as=$(./calicoctl bgp default-node-as)
-        while ! ./calicoctl bgp peer add $private_ipv4 as $calico_as ;
+        # Create a BGP Peer manifest file.
+        calico_as=$(./calicoctl config get asNumber)
+        cat > ./global_peer.yaml <<EOF
+        apiVersion: v1
+        kind: bgpPeer
+        metadata:
+          scope: global
+          peerIP: $private_ipv4
+        spec:
+          asNumber: $calico_as
+        EOF
+
+        while ! ./calicoctl apply -f ./global_peer.yaml;
         do
           echo Failed to add global RR BGP peer.
         done
