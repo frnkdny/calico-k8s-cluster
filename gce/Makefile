@@ -30,6 +30,10 @@ FLANNEL_IMAGE:=quay.io/coreos/flannel-git:v0.6.1-28-g5dde68d-amd64
 # IP range to use for pods.
 POD_CIDR:=10.244.0.0/16
 
+# The type of networking to use.  Set to "cni" for Calico, "kubenet" for
+# the default kubenet plugin.
+NETWORK_PLUGIN_MODE="cni"
+
 # Image used by kubelet as infrastructure container.
 POD_INFRA_IMAGE=gcr.io/google_containers/pause:0.8.0
 
@@ -379,6 +383,7 @@ build/etcd-template.yaml: templates/etcd-template.yaml Makefile local-settings.m
 	  sed "s~__CALICO_POLICY_IMAGE__~$(CALICO_POLICY_IMAGE)~g" | \
 	  sed "s~__CALICO_CNI_IMAGE__~$(CALICO_CNI_IMAGE)~g" | \
 	  sed "s~__POD_INFRA_IMAGE__~$(POD_INFRA_IMAGE)~g" | \
+	  sed "s~__NETWORK_PLUGIN_MODE__~$(NETWORK_PLUGIN_MODE)~g" | \
 	  sed "s~__FLANNEL_IMAGE__~$(FLANNEL_IMAGE)~g" | \
 	  sed "s~__POD_CIDR__~$(POD_CIDR)~g" | \
 	  sed "s~__CALICOCTL_URL__~$(CALICOCTL_URL)~g" | \
@@ -403,6 +408,7 @@ build/%: templates/% Makefile local-settings.mk build/grafana-json-url build/pro
 	  sed "s~__CALICO_POLICY_IMAGE__~$(CALICO_POLICY_IMAGE)~g" | \
 	  sed "s~__CALICO_CNI_IMAGE__~$(CALICO_CNI_IMAGE)~g" | \
 	  sed "s~__POD_INFRA_IMAGE__~$(POD_INFRA_IMAGE)~g" | \
+	  sed "s~__NETWORK_PLUGIN_MODE__~$(NETWORK_PLUGIN_MODE)~g" | \
 	  sed "s~__FLANNEL_IMAGE__~$(FLANNEL_IMAGE)~g" | \
 	  sed "s~__POD_CIDR__~$(POD_CIDR)~g" | \
 	  sed "s~__CALICOCTL_URL__~$(CALICOCTL_URL)~g" | \
