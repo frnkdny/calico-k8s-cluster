@@ -120,7 +120,6 @@ coreos:
         --cluster-domain=cluster.local \
         --api-servers=http://__CLUSTER_PREFIX__-master:8080 \
         --hostname-override=${HOSTNAME_OVERRIDE} \
-        --cloud-provider=gce \
         --network-plugin-dir=/etc/cni/net.d \
         --network-plugin=__NETWORK_PLUGIN_MODE__ \
         --non-masquerade-cidr=__POD_CIDR__ \

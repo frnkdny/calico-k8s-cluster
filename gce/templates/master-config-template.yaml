@@ -169,7 +169,7 @@ coreos:
         --service-account-private-key-file=/var/run/kubernetes/apiserver.key \
         --root-ca-file=/var/run/kubernetes/apiserver.crt \
         --allocate-node-cidrs=true \
-        --configure-cloud-routes=true \
+        --configure-cloud-routes=false \
         --cloud-provider=gce \
         --cloud-config=/etc/gce.conf \
         --cluster-name=__CLUSTER_PREFIX__ \
