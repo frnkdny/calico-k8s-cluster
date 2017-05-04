@@ -6,7 +6,7 @@ ETCD_CLUSTER_SIZE:=3
 NUM_PODS:=300
 GCE_REGION:=us-central1-f
 GCE_PROJECT:=unique-caldron-775
-GCE_IMAGE_NAME:=coreos-stable-1122-3-0-v20161021
+GCE_IMAGE_FAMILY:=coreos-stable
 GCE_IMAGE_PROJECT:=coreos-cloud
 MASTER_INSTANCE_TYPE:=n1-standard-16
 NODE_INSTANCE_TYPE:=n1-highcpu-4
@@ -17,11 +17,11 @@ HIGH_PERF_INSTANCE_TYPE:=n1-standard-8
 PREFIX:=kube-scale
 
 # Calico / Kubernetes versions.
-K8S_VER:=v1.5.3
-CALICO_POLICY_VER:=v0.5.2
-CALICO_CNI_VER:=v1.6.0
-CALICO_CONT_VER:=v1.0.2
-CNI_VER:=v0.3.0
+K8S_VER:=v1.6.2
+CALICO_POLICY_VER:=v0.6.0
+CALICO_CNI_VER:=v1.8.0
+CALICO_CONT_VER:=v1.1.2-rc2
+CNI_VER:=v0.5.2
 
 # Images, based on above versions.
 GETTER_IMAGE:=calico/getter
@@ -287,7 +287,7 @@ deploy-master:
 	  $(PREFIX)-master \
 	  --zone $(GCE_REGION) \
 	  --image-project $(GCE_IMAGE_PROJECT) \
-	  --image $(GCE_IMAGE_NAME) \
+	  --image-family $(GCE_IMAGE_FAMILY) \
 	  --machine-type $(MASTER_INSTANCE_TYPE) \
 	  --scopes $(MASTER_SCOPES) \
 	  --can-ip-forward \
@@ -303,7 +303,7 @@ deploy-nodes:
 	  $(NODE_NAMES) \
 	  --zone $(GCE_REGION) \
 	  --image-project $(GCE_IMAGE_PROJECT) \
-	  --image $(GCE_IMAGE_NAME) \
+	  --image-family $(GCE_IMAGE_FAMILY) \
 	  --machine-type $(NODE_INSTANCE_TYPE) \
 	  --scopes $(NODE_SCOPES) \
 	  --metadata-from-file user-data=build/node-config-template.yaml \
@@ -320,7 +320,7 @@ deploy-high-perf-nodes:
 	  $(HIGH_PERF_NODE_NAMES) \
 	  --zone $(GCE_REGION) \
 	  --image-project $(GCE_IMAGE_PROJECT) \
-	  --image $(GCE_IMAGE_NAME) \
+	  --image-family $(GCE_IMAGE_FAMILY) \
 	  --machine-type $(HIGH_PERF_INSTANCE_TYPE) \
 	  --scopes $(NODE_SCOPES) \
 	  --metadata-from-file user-data=build/node-config-template.yaml \
@@ -337,7 +337,7 @@ deploy-prom:
 	  $(PREFIX)-prom \
 	  --image-project coreos-cloud \
 	  --zone $(GCE_REGION) \
-	  --image $(GCE_IMAGE_NAME) \
+	  --image-family $(GCE_IMAGE_FAMILY) \
 	  --machine-type $(PROM_INSTANCE_TYPE) \
 	  --metadata-from-file user-data=build/prom-config-template.yaml \
 	  --no-address \
@@ -351,7 +351,7 @@ deploy-rr:
 	  $(PREFIX)-rr1 $(PREFIX)-rr2  \
 	  --image-project coreos-cloud \
 	  --zone $(GCE_REGION) \
-	  --image $(GCE_IMAGE_NAME) \
+	  --image-family $(GCE_IMAGE_FAMILY) \
 	  --machine-type $(RR_INSTANCE_TYPE) \
 	  --metadata-from-file user-data=build/rr-template.yaml \
 	  --no-address \
@@ -437,7 +437,7 @@ deploy-etcd: $(ETCD_CONFIG_FILENAMES)
 	    $(PREFIX)-etcd-$$ii \
 	    --zone $(GCE_REGION) \
 	    --image-project coreos-cloud \
-	    --image $(GCE_IMAGE_NAME) \
+	    --image-family $(GCE_IMAGE_FAMILY) \
 	    --machine-type $(ETCD_INSTANCE_TYPE) \
 	    --local-ssd interface=scsi \
 	    --no-address \
@@ -512,3 +512,8 @@ gce-failed-pods:
 
 gce-wait-for-pod-creation:
 	bash -c 'while [ $$(kubectl get po | grep -P -c "1/1\s+Running\s+0") -ne $(NUM_PODS) ] ;  do date; echo "Not enough nodes created - waiting"; kubectl describe rc |grep "Pods Status"; sleep 1;done'
+
+gce-label-nodes:
+	kubectl label nodes $(HIGH_PERF_NODE_NAMES) cloud.google.com/gke-nodepool=infrastructure
+	kubectl label nodes $(NODE_NAMES) cloud.google.com/gke-nodepool=default-pool
+
