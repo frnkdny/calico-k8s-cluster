@@ -513,7 +513,11 @@ gce-failed-pods:
 gce-wait-for-pod-creation:
 	bash -c 'while [ $$(kubectl get po | grep -P -c "1/1\s+Running\s+0") -ne $(NUM_PODS) ] ;  do date; echo "Not enough nodes created - waiting"; kubectl describe rc |grep "Pods Status"; sleep 1;done'
 
-gce-label-nodes:
-	kubectl label nodes $(HIGH_PERF_NODE_NAMES) cloud.google.com/gke-nodepool=infrastructure
-	kubectl label nodes $(NODE_NAMES) cloud.google.com/gke-nodepool=default-pool
+gce-label-infra-nodes:
+	kubectl label nodes --overwrite $(HIGH_PERF_NODE_NAMES) cloud.google.com/gke-nodepool=infrastructure
 
+gce-label-pool-nodes:
+	kubectl label nodes --overwrite $(NODE_NAMES) cloud.google.com/gke-nodepool=default-pool
+
+gce-clear-node-labels:
+	kubectl label nodes $(NODE_NAMES) cloud.google.com/gke-nodepool-
