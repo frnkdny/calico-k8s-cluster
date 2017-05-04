@@ -465,8 +465,8 @@ gce-cleanup:
 
 gce-forward-ports:
 	@-pkill -f '8080:localhost:8080'
-	bash -c 'until gcloud compute ssh core@$(PREFIX)-master -- -o LogLevel=quiet -o PasswordAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no date; do echo "Trying to forward ports"; sleep 1; done'
-	gcloud compute ssh core@$(PREFIX)-master -- -o PasswordAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+	bash -c 'until gcloud compute ssh --zone=$(GCE_REGION) core@$(PREFIX)-master -- -o LogLevel=quiet -o PasswordAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no date; do echo "Trying to forward ports"; sleep 1; done'
+	gcloud compute ssh --zone=$(GCE_REGION) core@$(PREFIX)-master -- -o PasswordAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
 	    -L 8080:localhost:8080 \
 	    -L 2379:localhost:2379 \
 	    -L 4194:localhost:4194 \
