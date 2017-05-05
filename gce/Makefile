@@ -325,6 +325,7 @@ deploy-high-perf-nodes:
 	  --scopes $(NODE_SCOPES) \
 	  --metadata-from-file user-data=build/node-config-template.yaml \
 	  --no-address \
+	  --boot-disk-size=100GB \
 	  --can-ip-forward \
 	  --tags no-ip,k8s-node,high-perf,$(PREFIX) & \
 	  echo "Waiting for creation of this batch of worker nodes to finish..."; \
