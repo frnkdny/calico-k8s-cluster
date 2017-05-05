@@ -281,6 +281,8 @@ gce-create: kubectl calicoctl $(TEMPLATED_OUTPUT)
 	$(MAKE) --no-print-directory gce-config-ssh
 	$(MAKE) --no-print-directory gce-forward-ports
 	#$(MAKE) --no-print-directory apply-node-labels
+	$(MAKE) --no-print-directory gce-label-pool-nodes
+	$(MAKE) --no-print-directory gce-label-infra-nodes
 
 deploy-master:
 	-gcloud compute instances create \
