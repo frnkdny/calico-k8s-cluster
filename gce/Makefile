@@ -5,6 +5,7 @@ NUM_HIGH_PERF_NODES:=1
 ETCD_CLUSTER_SIZE:=3
 NUM_PODS:=300
 GCE_REGION:=us-central1-f
+REGION=$(shell echo '$(GCE_REGION)' | cut -f 1,2 -d '-')
 GCE_PROJECT:=unique-caldron-775
 GCE_IMAGE_FAMILY:=coreos-stable
 GCE_IMAGE_PROJECT:=coreos-cloud
@@ -159,7 +160,6 @@ get-results:
 # See http://stackoverflow.com/a/12110773/61318
 #make -j12 get-diags
 get-diags: describe-nodes describe-pods describe-services describe-rc describe-ep get-prom-data $(LOG_RETRIEVAL_TARGETS)
-get-diags2: describe-services describe-rc describe-ep get-prom-data $(LOG_RETRIEVAL_TARGETS)
 
 get-prom-data:
 	@mkdir -p timings
@@ -280,9 +280,11 @@ gce-create: kubectl calicoctl $(TEMPLATED_OUTPUT)
 	$(MAKE) --no-print-directory deploy-high-perf-nodes
 	$(MAKE) --no-print-directory gce-config-ssh
 	$(MAKE) --no-print-directory gce-forward-ports
-	#$(MAKE) --no-print-directory apply-node-labels
+	@echo "Waiting 20s to ensure a connection to the server is established..."
+	sleep 20
 	$(MAKE) --no-print-directory gce-label-pool-nodes
 	$(MAKE) --no-print-directory gce-label-infra-nodes
+	#$(MAKE) --no-print-directory apply-node-labels
 
 deploy-master:
 	-gcloud compute instances create \
@@ -462,9 +464,13 @@ gce-cleanup:
 	gcloud compute routes list -r '$(PREFIX).*' | \
 	  tail -n +2 | cut -f1 -d' ' | xargs gcloud compute routes delete 
 	# Clean up any firewall-rules created by the cluster.
-	gcloud compute firewall-rules delete $(gcloud compute firewall-rules list | grep '$(PREFIX)' | awk '{print $1}')
-	# Clean up any disks created by the cluster.
-	gcloud compute disks delete $(gcloud compute disks list | grep '$(PREFIIX)' | awk '{print $1}')
+	gcloud compute firewall-rules list | grep '$(PREFIX)' | cut -f 1 -d ' ' \
+	  | xargs gcloud compute firewall-rules delete
+
+gce-cleanup-lbs:
+	# Clean up any load balancer instances.
+	gcloud compute forwarding-rules list | cut -f 1 -d ' ' | grep -v NAME \
+	  | xargs gcloud compute forwarding-rules delete --region='$(REGION)'
 
 gce-forward-ports:
 	@-pkill -f '8080:localhost:8080'
