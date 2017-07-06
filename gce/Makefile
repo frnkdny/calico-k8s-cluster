@@ -4,8 +4,8 @@ CLUSTER_SIZE:=2
 NUM_HIGH_PERF_NODES:=1
 ETCD_CLUSTER_SIZE:=3
 NUM_PODS:=300
-GCE_REGION:=us-central1-f
-REGION=$(shell echo '$(GCE_REGION)' | cut -f 1,2 -d '-')
+GCE_ZONE:=us-central1-f
+GCE_REGION=$(shell echo '$(GCE_ZONE)' | cut -f 1,2 -d '-')
 GCE_PROJECT:=unique-caldron-775
 GCE_IMAGE_FAMILY:=coreos-stable
 GCE_IMAGE_PROJECT:=coreos-cloud
@@ -288,7 +288,7 @@ gce-create: kubectl calicoctl $(TEMPLATED_OUTPUT)
 deploy-master:
 	-gcloud compute instances create \
 	  $(PREFIX)-master \
-	  --zone $(GCE_REGION) \
+	  --zone $(GCE_ZONE) \
 	  --image-project $(GCE_IMAGE_PROJECT) \
 	  --image-family $(GCE_IMAGE_FAMILY) \
 	  --machine-type $(MASTER_INSTANCE_TYPE) \
@@ -304,7 +304,7 @@ deploy-master:
 deploy-nodes:
 	-gcloud compute instances create \
 	  $(NODE_NAMES) \
-	  --zone $(GCE_REGION) \
+	  --zone $(GCE_ZONE) \
 	  --image-project $(GCE_IMAGE_PROJECT) \
 	  --image-family $(GCE_IMAGE_FAMILY) \
 	  --machine-type $(NODE_INSTANCE_TYPE) \
@@ -321,7 +321,7 @@ deploy-nodes:
 deploy-high-perf-nodes:
 	-gcloud compute instances create \
 	  $(HIGH_PERF_NODE_NAMES) \
-	  --zone $(GCE_REGION) \
+	  --zone $(GCE_ZONE) \
 	  --image-project $(GCE_IMAGE_PROJECT) \
 	  --image-family $(GCE_IMAGE_FAMILY) \
 	  --machine-type $(HIGH_PERF_INSTANCE_TYPE) \
@@ -340,7 +340,7 @@ deploy-prom:
 	-gcloud compute instances create \
 	  $(PREFIX)-prom \
 	  --image-project coreos-cloud \
-	  --zone $(GCE_REGION) \
+	  --zone $(GCE_ZONE) \
 	  --image-family $(GCE_IMAGE_FAMILY) \
 	  --machine-type $(PROM_INSTANCE_TYPE) \
 	  --metadata-from-file user-data=build/prom-config-template.yaml \
@@ -354,7 +354,7 @@ deploy-rr:
 	-gcloud compute instances create \
 	  $(PREFIX)-rr1 $(PREFIX)-rr2  \
 	  --image-project coreos-cloud \
-	  --zone $(GCE_REGION) \
+	  --zone $(GCE_ZONE) \
 	  --image-family $(GCE_IMAGE_FAMILY) \
 	  --machine-type $(RR_INSTANCE_TYPE) \
 	  --metadata-from-file user-data=build/rr-template.yaml \
@@ -365,7 +365,7 @@ deploy-rr:
 	  echo "route reflector node started."
 
 remove-prom:
-	gcloud compute instances delete --zone $(GCE_REGION) $(PREFIX)-prom
+	gcloud compute instances delete --zone $(GCE_ZONE) $(PREFIX)-prom
 
 # build/prometheus.yml needs its own templating to avoid a circular dependency.
 build/prometheus.yml: templates/prometheus.yml Makefile local-settings.mk
@@ -439,7 +439,7 @@ deploy-etcd: $(ETCD_CONFIG_FILENAMES)
 	  echo "Starting $(PREFIX)-etcd-$$ii"; \
 	  gcloud compute instances create \
 	    $(PREFIX)-etcd-$$ii \
-	    --zone $(GCE_REGION) \
+	    --zone $(GCE_ZONE) \
 	    --image-project coreos-cloud \
 	    --image-family $(GCE_IMAGE_FAMILY) \
 	    --machine-type $(ETCD_INSTANCE_TYPE) \
@@ -457,8 +457,8 @@ clean: gce-cleanup
 
 gce-cleanup:
 	# Clean up any instances.
-	gcloud compute instances list --zones $(GCE_REGION) -r '$(PREFIX).*' | \
-	  tail -n +2 | cut -f1 -d' ' | xargs gcloud compute instances delete --zone $(GCE_REGION)
+	gcloud compute instances list --zones $(GCE_ZONE) -r '$(PREFIX).*' | \
+	  tail -n +2 | cut -f1 -d' ' | xargs gcloud compute instances delete --zone $(GCE_ZONE)
 	# Clean up any routes created by the cluster.
 	gcloud compute routes list -r '$(PREFIX).*' | \
 	  tail -n +2 | cut -f1 -d' ' | xargs gcloud compute routes delete 
@@ -469,12 +469,12 @@ gce-cleanup:
 gce-cleanup-lbs:
 	# Clean up any load balancer instances.
 	gcloud compute forwarding-rules list | cut -f 1 -d ' ' | grep -v NAME \
-	  | xargs gcloud compute forwarding-rules delete --region='$(REGION)'
+	  | xargs gcloud compute forwarding-rules delete --region='$(GCE_REGION)'
 
 gce-forward-ports:
 	@-pkill -f '8080:localhost:8080'
-	bash -c 'until gcloud compute ssh --zone=$(GCE_REGION) core@$(PREFIX)-master -- -o LogLevel=quiet -o PasswordAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no date; do echo "Trying to forward ports"; sleep 1; done'
-	gcloud compute ssh --zone=$(GCE_REGION) core@$(PREFIX)-master -- -o PasswordAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
+	bash -c 'until gcloud compute ssh --zone=$(GCE_ZONE) core@$(PREFIX)-master -- -o LogLevel=quiet -o PasswordAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no date; do echo "Trying to forward ports"; sleep 1; done'
+	gcloud compute ssh --zone=$(GCE_ZONE) core@$(PREFIX)-master -- -o PasswordAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \
 	    -L 8080:localhost:8080 \
 	    -L 2379:localhost:2379 \
 	    -L 4194:localhost:4194 \
