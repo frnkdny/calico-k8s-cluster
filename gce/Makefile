@@ -280,8 +280,7 @@ gce-create: kubectl calicoctl $(TEMPLATED_OUTPUT)
 	$(MAKE) --no-print-directory deploy-high-perf-nodes
 	$(MAKE) --no-print-directory gce-config-ssh
 	$(MAKE) --no-print-directory gce-forward-ports
-	@echo "Waiting 20s to ensure a connection to the server is established..."
-	sleep 20
+	bash -c 'while [ $$(curl 127.0.0.1:8080/version  2>&1 | grep -c refused) -ne "0" ] ;  do date; echo "Waiting till a connection to the API server is established...";  sleep 1;done'
 	$(MAKE) --no-print-directory gce-label-pool-nodes
 	$(MAKE) --no-print-directory gce-label-infra-nodes
 	#$(MAKE) --no-print-directory apply-node-labels
